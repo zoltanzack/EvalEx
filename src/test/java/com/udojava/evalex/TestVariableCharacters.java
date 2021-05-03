@@ -5,8 +5,10 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
 public class TestVariableCharacters {
-
-	@Test
+	/**
+	 * Removed testBadVarChar as period is now used to denote a sub-variable
+	 */
+	/*@Test
 	public void testBadVarChar() {
 		String err = "";
 		try {
@@ -16,7 +18,7 @@ public class TestVariableCharacters {
 			err = e.getMessage();
 		}
 		assertEquals("Unknown operator . at character position 2", err);
-	}
+	}*/
 
 	@Test
 	public void testAddedVarChar() {

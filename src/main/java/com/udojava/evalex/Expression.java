@@ -138,8 +138,9 @@ public class Expression {
 
     /**
      * The characters (other than letters and digits) allowed as the second or subsequent characters in a variable.
+     *
      */
-    private String varChars = "_";
+    private String varChars = "_.";
 
     /**
      * The original infix expression.
@@ -165,12 +166,12 @@ public class Expression {
     /**
      * All defined functions with name and implementation.
      */
-    protected Map<String, com.udojava.evalex.LazyFunction> functions = new TreeMap<String, com.udojava.evalex.LazyFunction>(String.CASE_INSENSITIVE_ORDER);
+    protected Map<String, com.udojava.evalex.LazyFunction> functions = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
 
     /**
      * All defined variables with name and value.
      */
-    protected Map<String, LazyNumber> variables = new TreeMap<String, LazyNumber>(String.CASE_INSENSITIVE_ORDER);
+    protected Map<String, LazyNumber> variables = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
 
     /**
      * What character to use for decimal separators.
@@ -402,73 +403,112 @@ public class Expression {
                     || (ch >= 'A' && ch <= 'F');
         }
 
+        /**
+         * Evalulates the next token in the expression
+         *
+         * @return The next token
+         */
         @Override
         public Token next() {
             Token token = new Token();
 
+            /* Exit; end of expression */
             if (pos >= input.length()) {
                 previousToken = null;
                 return null;
             }
+
+            /* Skip whitespaces */
             char ch = input.charAt(pos);
             while (Character.isWhitespace(ch) && pos < input.length()) {
                 ch = input.charAt(++pos);
             }
+
             token.pos = pos;
 
-            boolean isHex = false;
+            boolean isHex = false; // Hex break out flag
 
+            /* Number token */
             if (Character.isDigit(ch) || (ch == DECIMAL_SEPARATOR && Character.isDigit(peekNextChar()))) {
+
+                /* Hexadecimal identifier */
                 if (ch == '0' && (peekNextChar() == 'x' || peekNextChar() == 'X')) {
                     isHex = true;
                 }
-                while ((isHex
-                        && isHexDigit(
-                        ch))
-                        || (Character.isDigit(ch) || ch == DECIMAL_SEPARATOR || ch == 'e' || ch == 'E'
-                        || (ch == MINUS_SIGN && token.length() > 0
-                        && ('e' == token.charAt(token.length() - 1)
-                        || 'E' == token.charAt(token.length() - 1)))
-                        || (ch == '+' && token.length() > 0
-                        && ('e' == token.charAt(token.length() - 1)
-                        || 'E' == token.charAt(token.length() - 1))))
-                        && (pos < input.length())) {
+
+                /* Parse number */
+                while (
+                        (pos < input.length()) // Is valid position
+
+                        && (isHex && isHexDigit(ch)) // Is a hex digit
+
+                        || (Character.isDigit(ch) || ch == DECIMAL_SEPARATOR || ch == 'e' || ch == 'E' // Is a number
+
+                        || (ch == MINUS_SIGN && token.length() > 0 &&  ('e' == token.charAt(token.length() - 1) || 'E' == token.charAt(token.length() - 1))) // Exponent minus number
+                        || (ch == '+' && token.length() > 0 && ('e' == token.charAt(token.length() - 1) // Exponent positive number
+
+                        || 'E' == token.charAt(token.length() - 1))))) { // Exponent identifer
+
+                    /* Add character to token and get the next character (or reset it) */
                     token.append(input.charAt(pos++));
-                    ch = pos == input.length() ? 0 : input.charAt(pos);
+                    ch = (pos == input.length()) ? 0 : input.charAt(pos);
+
                 }
-                token.type = isHex ? TokenType.HEX_LITERAL : TokenType.LITERAL;
+
+                token.type = (isHex) ? TokenType.HEX_LITERAL : TokenType.LITERAL;
+
+            /* String token */
             } else if (ch == '"') {
                 pos++;
+
+                /* Get string literal */
                 if (previousToken.type != TokenType.STRINGPARAM) {
                     ch = input.charAt(pos);
                     while (ch != '"') {
                         token.append(input.charAt(pos++));
                         ch = pos == input.length() ? 0 : input.charAt(pos);
                     }
+
                     token.type = TokenType.STRINGPARAM;
+
                 } else {
                     return next();
                 }
-            } else if (Character.isLetter(ch) || firstVarChars.indexOf(ch) >= 0) {
-                while ((Character.isLetter(ch) || Character.isDigit(ch) || varChars.indexOf(ch) >= 0
-                        || token.length() == 0 && firstVarChars.indexOf(ch) >= 0) && (pos < input.length())) {
+
+            /* Variable */
+            } else if (Character.isLetter(ch) || firstVarChars.indexOf(ch) >= 0) { // A letter, that isn't a hex-digit, or character permissiable as the first in a variable
+
+                while (pos < input.length() && // Is valid position
+                        (Character.isLetter(ch) || Character.isDigit(ch) || varChars.indexOf(ch) >= 0 || token.length() == 0 && firstVarChars.indexOf(ch) >= 0)) { // Valid character
+
+                    /* Add character to token and get the next character (or reset it) */
                     token.append(input.charAt(pos++));
                     ch = pos == input.length() ? 0 : input.charAt(pos);
+
                 }
-                // Remove optional white spaces after function or variable name
+
+                /* Remove white spaces after function or variable name */
                 if (Character.isWhitespace(ch)) {
                     while (Character.isWhitespace(ch) && pos < input.length()) {
                         ch = input.charAt(pos++);
                     }
                     pos--;
                 }
+
+                /* Variable token is an operator */
                 if (operators.containsKey(token.surface)) {
                     token.type = TokenType.OPERATOR;
+
+                /* Variable token is a function */
                 } else if (ch == '(') {
                     token.type = TokenType.FUNCTION;
+
+                /* Else, is variable */
                 } else {
                     token.type = TokenType.VARIABLE;
                 }
+
+            /* Parenthesis or comma */
             } else if (ch == '(' || ch == ')' || ch == ',') {
                 if (ch == '(') {
                     token.type = TokenType.OPEN_PAREN;
@@ -477,16 +517,23 @@ public class Expression {
                 } else {
                     token.type = TokenType.COMMA;
                 }
+
                 token.append(ch);
                 pos++;
+
+            /*  */
             } else {
+                System.out.println("Debug: Greedy Matching!" + token);
+
                 String greedyMatch = "";
                 int initialPos = pos;
                 ch = input.charAt(pos);
                 int validOperatorSeenUntil = -1;
-                while (!Character.isLetter(ch) && !Character.isDigit(ch) && firstVarChars.indexOf(ch) < 0
-                        && !Character.isWhitespace(ch) && ch != '(' && ch != ')' && ch != ','
-                        && (pos < input.length())) {
+
+                while ((pos < input.length()) // Is valid
+                        && !Character.isLetter(ch) && !Character.isDigit(ch) && firstVarChars.indexOf(ch) < 0 // Not a letter, digit, or start of variable
+                        && !Character.isWhitespace(ch) && ch != '(' && ch != ')' && ch != ',') {  // Not a whitespace, or punctuation
+
                     greedyMatch += ch;
                     pos++;
                     if (operators.containsKey(greedyMatch)) {
@@ -494,6 +541,7 @@ public class Expression {
                     }
                     ch = pos == input.length() ? 0 : input.charAt(pos);
                 }
+
                 if (validOperatorSeenUntil != -1) {
                     token.append(input.substring(initialPos, validOperatorSeenUntil));
                     pos = validOperatorSeenUntil;
@@ -510,6 +558,8 @@ public class Expression {
                     token.type = TokenType.OPERATOR;
                 }
             }
+
+            /* Return new token, and set this as the previous */
             previousToken = token;
             return token;
         }
@@ -519,6 +569,24 @@ public class Expression {
             throw new ExpressionException("remove() not supported");
         }
 
+    }
+
+    /**
+     * Creates a new expression instance from an existing expression instance, and a new expression string
+     *
+     * @param newExpression The expression. E.g. <code>"2.4*sin(3)/(2-4)"</code> or
+     *                      <code>"sin(y)>0 & max(z, 3)>3"</code>
+     * @param oldExpression The old expression to build from
+     */
+    public Expression(String newExpression, Expression oldExpression) {
+        this.mc = oldExpression.mc;
+        this.powerOperatorPrecedence = oldExpression.powerOperatorPrecedence;
+        this.expressionString = newExpression;
+        this.originalExpression = newExpression;
+
+        this.operators = oldExpression.operators;
+        this.functions = oldExpression.functions;
+        this.variables = oldExpression.variables;
     }
 
     /**
@@ -549,6 +617,8 @@ public class Expression {
 
     /**
      * Creates a new expression instance from an expression string with given settings.
+     * <p>
+     * TODO: Cache operators and functions, allow instantation from existing expression, changing just the statement
      *
      * @param expression         The expression. E.g. <code>"2.4*sin(3)/(2-4)"</code> or
      *                           <code>"sin(y)>0 & max(z, 3)>3"</code>
@@ -1087,6 +1157,20 @@ public class Expression {
                     }
                 }
                 return max;
+            }
+        });
+        addFunction(new Function("COUNT", -1) {
+            @Override
+            public BigDecimal eval(List<BigDecimal> parameters) {
+                if(parameters.isEmpty())
+                    throw new ExpressionException("Count function requires at least on parameter");
+
+                BigDecimal count = new BigDecimal(0);
+                for(BigDecimal paramater : parameters) {
+                    count = count.add(paramater);
+                }
+
+                return count;
             }
         });
         addFunction(new Function("MIN", -1) {
